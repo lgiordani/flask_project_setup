@@ -3,4 +3,4 @@
 pytest
 coverage
 pytest-cov
-
+pytest-flask
