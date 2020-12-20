@@ -1,1 +1,6 @@
 -r production.txt
+
+pytest
+coverage
+pytest-cov
+
