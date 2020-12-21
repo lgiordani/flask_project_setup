@@ -1,1 +1,3 @@
 Flask
+flask-sqlalchemy
+psycopg2

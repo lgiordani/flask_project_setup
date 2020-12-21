@@ -1,6 +1,16 @@
 version: '3.4'
 
 services:
+  db:
+    image: postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
   web:
     build:
       context: ${PWD}
@@ -8,8 +18,16 @@ services:
     environment:
       FLASK_ENV: ${FLASK_ENV}
       FLASK_CONFIG: ${FLASK_CONFIG}
+      APPLICATION_DB: ${APPLICATION_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_HOSTNAME: "db"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PORT: ${POSTGRES_PORT}
     command: flask run --host 0.0.0.0
     volumes:
       - ${PWD}:/opt/code
     ports:
       - "5000:5000"
+
+volumes:
+  pgdata:
