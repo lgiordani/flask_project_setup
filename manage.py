@@ -5,6 +5,7 @@ import json
 import signal
 import subprocess
 import time
+import shutil
 
 import click
 import psycopg2
@@ -155,6 +156,83 @@ def test(filenames):
 
     cmdline = docker_compose_cmdline("down")
     subprocess.call(cmdline)
+
+
+@cli.group()
+def scenario():
+    pass
+
+
+@scenario.command()
+@click.argument("name")
+def up(name):
+    os.environ["APPLICATION_CONFIG"] = f"scenario_{name}"
+    config = os.getenv("APPLICATION_CONFIG")
+
+    scenario_config_source_file = app_config_file("scenario")
+    scenario_config_file = app_config_file(config)
+
+    if not os.path.isfile(scenario_config_source_file):
+        raise ValueError(f"File {scenario_config_source_file} doesn't exist")
+    shutil.copy(scenario_config_source_file, scenario_config_file)
+
+    scenario_docker_source_file = docker_compose_file("scenario")
+    scenario_docker_file = docker_compose_file(config)
+
+    if not os.path.isfile(scenario_docker_source_file):
+        raise ValueError(f"File {scenario_docker_source_file} doesn't exist")
+    shutil.copy(docker_compose_file("scenario"), scenario_docker_file)
+
+    configure_app(f"scenario_{name}")
+
+    cmdline = docker_compose_cmdline("up -d")
+    subprocess.call(cmdline)
+
+    cmdline = docker_compose_cmdline("logs db")
+    wait_for_logs(cmdline, "ready to accept connections")
+
+    cmdline = docker_compose_cmdline("port db 5432")
+    out = subprocess.check_output(cmdline)
+    port = out.decode("utf-8").replace("\n", "").split(":")[1]
+    os.environ["POSTGRES_PORT"] = port
+
+    run_sql([f"CREATE DATABASE {os.getenv('APPLICATION_DB')}"])
+
+    scenario_module = f"scenarios.{name}"
+    scenario_file = os.path.join("scenarios", f"{name}.py")
+    if os.path.isfile(scenario_file):
+        import importlib
+
+        os.environ["APPLICATION_SCENARIO_NAME"] = name
+
+        scenario = importlib.import_module(scenario_module)
+        scenario.run()
+
+    cmdline = " ".join(
+        docker_compose_cmdline(
+            "exec db psql -U {} -d {}".format(
+                os.getenv("POSTGRES_USER"), os.getenv("APPLICATION_DB")
+            )
+        )
+    )
+    print("Your scenario is ready. If you want to open a SQL shell run")
+    print(cmdline)
+
+
+@scenario.command()
+@click.argument("name")
+def down(name):
+    os.environ["APPLICATION_CONFIG"] = f"scenario_{name}"
+    config = os.getenv("APPLICATION_CONFIG")
+
+    cmdline = docker_compose_cmdline("down")
+    subprocess.call(cmdline)
+
+    scenario_config_file = app_config_file(config)
+    os.remove(scenario_config_file)
+
+    scenario_docker_file = docker_compose_file(config)
+    os.remove(scenario_docker_file)
 
 
 if __name__ == "__main__":
